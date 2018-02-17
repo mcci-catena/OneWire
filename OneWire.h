@@ -412,7 +412,7 @@ void directWriteHigh(IO_REG_TYPE mask)
 #elif defined(ARDUINO_ARCH_STM32)
 // IO_REG_TYPE needs to be an int type. get_GPIO_Port returns a struct pointer.
 // so... we have to typecast.
-#define PIN_TO_BASEREG(pin)             (IO_REG_TYPE *)(get_GPIO_Port(STM_PORT(digitalPinToPinName(pin))))
+#define PIN_TO_BASEREG(pin)             ((volatile IO_REG_TYPE *)(get_GPIO_Port(STM_PORT(digitalPinToPinName(pin)))))
 #define PIN_TO_BITMASK(pin)             STM_GPIO_PIN(digitalPinToPinName(pin))
 #define IO_REG_TYPE                     uint32_t
 #define IO_REG_BASE_ATTR                /* not used */
