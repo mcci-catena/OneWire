@@ -170,11 +170,16 @@ static void inline my_delayMicroseconds(uint32_t usec)
 }
 #endif // ARDUINO_ARCH_STM32
 
-OneWire::OneWire(uint8_t pin)
+OneWire::OneWire(uint8_t pin, uint8_t debug_pin)
 {
 	pinMode(pin, INPUT);
+	pinMode(debug_pin, OUTPUT);
 	bitmask = PIN_TO_BITMASK(pin);
 	baseReg = PIN_TO_BASEREG(pin);
+
+	this->debug_bitmask = PIN_TO_BITMASK(debug_pin);
+	this->debug_baseReg = PIN_TO_BASEREG(debug_pin);
+
 #if ONEWIRE_SEARCH
 	reset_search();
 #endif
@@ -191,6 +196,8 @@ uint8_t OneWire::reset(void)
 {
 	IO_REG_TYPE mask IO_REG_MASK_ATTR = bitmask;
 	volatile IO_REG_TYPE *reg IO_REG_BASE_ATTR = baseReg;
+	IO_REG_TYPE debug_mask = this->debug_bitmask;
+	volatile IO_REG_TYPE *pDebugReg = this->debug_baseReg;
 	uint8_t r;
 	uint8_t retries = 125;
 
@@ -206,9 +213,16 @@ uint8_t OneWire::reset(void)
 	noInterrupts();
 	DIRECT_WRITE_LOW(reg, mask);
 	DIRECT_MODE_OUTPUT(reg, mask);	// drive output low
+	DIRECT_WRITE_HIGH(pDebugReg, debug_mask);
 	interrupts();
+	//delayMicroseconds(480); is about 580
+	// 380 is about the same as 480
+	// 280 is 384
+	// but my_delayMicroseconds is off by only 16 us
 	delayMicroseconds(480);
 	noInterrupts();
+	DIRECT_WRITE_LOW(pDebugReg, debug_mask);
+
 	DIRECT_MODE_INPUT(reg, mask);	// allow it to float
 	delayMicroseconds(70);
 	r = !DIRECT_READ(reg, mask);
@@ -225,21 +239,27 @@ void OneWire::write_bit(uint8_t v)
 {
 	IO_REG_TYPE mask IO_REG_MASK_ATTR = bitmask;
 	volatile IO_REG_TYPE *reg IO_REG_BASE_ATTR = baseReg;
+	IO_REG_TYPE debug_mask = this->debug_bitmask;
+	volatile IO_REG_TYPE *pDebugReg = this->debug_baseReg;
 
 	if (v & 1) {
 		noInterrupts();
+		DIRECT_WRITE_HIGH(pDebugReg, debug_mask);
 		DIRECT_WRITE_LOW(reg, mask);
 		DIRECT_MODE_OUTPUT(reg, mask);	// drive output low
 		delayMicroseconds(10);
 		DIRECT_WRITE_HIGH(reg, mask);	// drive output high
 		interrupts();
 		delayMicroseconds(55);
+		DIRECT_WRITE_LOW(pDebugReg, debug_mask);
 	} else {
 		noInterrupts();
+		DIRECT_WRITE_HIGH(pDebugReg, debug_mask);
 		DIRECT_WRITE_LOW(reg, mask);
 		DIRECT_MODE_OUTPUT(reg, mask);	// drive output low
 		delayMicroseconds(65);
 		DIRECT_WRITE_HIGH(reg, mask);	// drive output high
+		DIRECT_WRITE_LOW(pDebugReg, debug_mask);
 		interrupts();
 		delayMicroseconds(5);
 	}
