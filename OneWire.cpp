@@ -141,6 +141,34 @@ sample code bearing this copyright.
 
 #include "OneWire.h"
 
+// BUG(tmm@mcci.com) this needs to be in core.
+#if defined(ARDUINO_ARCH_STM32)
+#define delayMicroseconds(usec) my_delayMicroseconds(usec)
+
+static void inline my_delayMicroseconds(uint32_t usec)
+{
+  const uint32_t now = SysTick->VAL;
+  const uint32_t tickmax = SysTick->LOAD;
+  const uint32_t ticks = (usec * tickmax + 500) / 1000;
+  uint32_t val, lastVal;
+  uint32_t dt;
+
+  for (dt = 0, lastVal = now;
+       dt < ticks;
+       lastVal = val)
+  {
+    val = SysTick->VAL;
+    if (val >= lastVal)
+    {
+      dt += (tickmax + lastVal - val);
+    }
+    else
+    {
+      dt += (lastVal - val);
+    }
+  }
+}
+#endif // ARDUINO_ARCH_STM32
 
 OneWire::OneWire(uint8_t pin)
 {
