@@ -409,6 +409,40 @@ void directWriteHigh(IO_REG_TYPE mask)
 #define DIRECT_MODE_INPUT(base, mask)    directModeInput(mask)
 #define DIRECT_MODE_OUTPUT(base, mask)   directModeOutput(mask)
 
+#elif defined(ARDUINO_ARCH_STM32)
+// IO_REG_TYPE needs to be an int type. get_GPIO_Port returns a struct pointer.
+// so... we have to typecast.
+#define PIN_TO_BASEREG(pin)             ((volatile IO_REG_TYPE *)(get_GPIO_Port(STM_PORT(digitalPinToPinName(pin)))))
+#define PIN_TO_BITMASK(pin)             STM_GPIO_PIN(digitalPinToPinName(pin))
+#define IO_REG_TYPE                     uint32_t
+#define IO_REG_BASE_ATTR                /* not used */
+#define IO_REG_MASK_ATTR                /* not used */
+#define DIRECT_READ(base, mask)         (((*((base)+0x10/4)) & (mask)) ? 1 : 0)
+#define DIRECT_MODE_INPUT(base, mask)   directModeInputOutput(base, mask, 0)
+#define DIRECT_MODE_OUTPUT(base, mask)  directModeInputOutput(base, mask, 1)
+#define DIRECT_WRITE_LOW(base, mask)    ((*((base)+0x28/4)) = (mask))
+#define DIRECT_WRITE_HIGH(base, mask)   ((*((base)+0x18/4)) = (mask))
+
+/* hack: always make the device open drain */
+static inline __attribute__((always_inline))
+void directModeInputOutput(volatile IO_REG_TYPE *base, IO_REG_TYPE mask, int fOutput)
+{
+    // hack: assume input mask is a power of 2, so squaring gives us
+    // the bit at bit 0, 2, 4, 6, 8 for input bits 0, 1, 2, 3, 4, etc.
+    IO_REG_TYPE const modeBaseMask = mask * mask;
+    // now convert to a 2-bit mask for the field
+    IO_REG_TYPE const modeBitfieldMask = (modeBaseMask << 1) | modeBaseMask;
+    volatile GPIO_TypeDef * const pGpio = (volatile GPIO_TypeDef *)base;
+
+    const IO_REG_TYPE inputMode = 0x0;
+    const IO_REG_TYPE outputMode = 0x55555555; // 01 in each field.
+    const IO_REG_TYPE modeValue = (fOutput ? outputMode : inputMode) & modeBitfieldMask;
+
+
+    // now, we can set the desired field based on the input mode.
+    pGpio->MODER = (pGpio->MODER & ~modeBitfieldMask) | modeValue;
+}
+
 #else
 #define PIN_TO_BASEREG(pin)             (0)
 #define PIN_TO_BITMASK(pin)             (pin)
